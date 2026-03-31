@@ -79,6 +79,11 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
     description: "Local Hermes CLI agent",
     icon: HermesIcon,
   },
+  lobstercage: {
+    label: "LobsterCage",
+    description: "Run agents in LobsterCage-managed workers",
+    icon: Bot,
+  },
   pi_local: {
     label: "Pi",
     description: "Local Pi agent",

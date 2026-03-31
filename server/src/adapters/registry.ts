@@ -85,6 +85,11 @@ import { buildExternalAdapters } from "./plugin-loader.js";
 import { getDisabledAdapterTypes } from "../services/adapter-plugin-store.js";
 import { processAdapter } from "./process/index.js";
 import { httpAdapter } from "./http/index.js";
+import {
+  execute as lobsterCageExecute,
+  testEnvironment as lobsterCageTestEnvironment,
+} from "@paperclipai/adapter-lobstercage/server";
+import { agentConfigurationDoc as lobsterCageAgentConfigurationDoc } from "@paperclipai/adapter-lobstercage";
 
 const claudeLocalAdapter: ServerAdapterModule = {
   type: "claude_local",
@@ -193,6 +198,15 @@ const hermesLocalAdapter: ServerAdapterModule = {
   detectModel: () => detectModelFromHermes(),
 };
 
+const lobsterCageAdapter: ServerAdapterModule = {
+  type: "lobstercage",
+  execute: lobsterCageExecute,
+  testEnvironment: lobsterCageTestEnvironment,
+  models: [],
+  supportsLocalAgentJwt: false,
+  agentConfigurationDoc: lobsterCageAgentConfigurationDoc,
+};
+
 const adaptersByType = new Map<string, ServerAdapterModule>();
 
 // For builtin types that are overridden by an external adapter, we keep the
@@ -214,6 +228,7 @@ function registerBuiltInAdapters() {
     geminiLocalAdapter,
     openclawGatewayAdapter,
     hermesLocalAdapter,
+    lobsterCageAdapter,
     processAdapter,
     httpAdapter,
   ]) {
