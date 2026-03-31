@@ -95,6 +95,66 @@ describe("pollForCompletion", () => {
     expect(result.cageStatus).toBe("stopped");
   });
 
+  it("succeeds when heartbeat completes entirely between polls", async () => {
+    const invokeTime = 1000;
+
+    // First poll: heartbeat already started AND finished — we never saw possiblyActive: true
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        available: true,
+        status: "running",
+        heartbeat: {
+          enabled: true,
+          possiblyActive: false,
+          lastStart: 1100,
+          lastEnd: 1400,
+        },
+      }),
+    );
+
+    const result = await pollForCompletion(
+      "https://gw.test/status/cage1/tok1",
+      invokeTime,
+      Date.now() + 60_000,
+      100,
+    );
+
+    expect(result.completed).toBe(true);
+    expect(result.timedOut).toBe(false);
+    expect(result.failed).toBe(false);
+    expect(result.summary).toBe("Heartbeat completed");
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("succeeds when cage hibernates after heartbeat completed between polls", async () => {
+    const invokeTime = 1000;
+
+    // Cage already stopped, but timestamps prove the heartbeat ran
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        available: false,
+        status: "stopped",
+        heartbeat: {
+          enabled: true,
+          possiblyActive: false,
+          lastStart: 1100,
+          lastEnd: 1400,
+        },
+      }),
+    );
+
+    const result = await pollForCompletion(
+      "https://gw.test/status/cage1/tok1",
+      invokeTime,
+      Date.now() + 60_000,
+      100,
+    );
+
+    expect(result.completed).toBe(true);
+    expect(result.failed).toBe(false);
+    expect(result.summary).toBe("Heartbeat completed");
+  });
+
   it("fails when cage stops without heartbeat evidence", async () => {
     // Cage stopped but no heartbeat was ever observed for this invoke
     mockFetch.mockResolvedValueOnce(

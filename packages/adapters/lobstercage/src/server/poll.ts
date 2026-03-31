@@ -90,10 +90,10 @@ export async function pollForCompletion(
       sawHeartbeatActive = true;
     }
 
-    // Heartbeat completed: we saw it start after our invoke, and it finished.
-    // Requires lastStart >= invokeTime (our trigger) AND lastEnd > lastStart.
+    // Heartbeat completed: timestamps prove our invoke's heartbeat ran and
+    // finished. This does NOT require sawHeartbeatActive — the heartbeat may
+    // have started and finished entirely between two polls.
     if (
-      sawHeartbeatActive &&
       status.heartbeat &&
       !status.heartbeat.possiblyActive &&
       status.heartbeat.lastStart != null &&
@@ -111,7 +111,9 @@ export async function pollForCompletion(
     }
 
     // Cage stopped/hibernating AFTER we observed the heartbeat running —
-    // the work ran and the cage shut down naturally.
+    // the work ran and the cage shut down naturally. This fallback handles
+    // cases where lastEnd wasn't populated (e.g. cage-manager restarted)
+    // but we did see the heartbeat active.
     if (
       sawHeartbeatActive &&
       !status.available &&
@@ -126,8 +128,9 @@ export async function pollForCompletion(
       };
     }
 
-    // Cage stopped/hibernating but we never saw a heartbeat for this invoke —
-    // the wake failed or the cage stopped for another reason.
+    // Cage stopped/hibernating but we never saw a heartbeat for this invoke
+    // and timestamps don't prove one ran — wake failed or cage stopped
+    // for another reason.
     if (
       !sawHeartbeatActive &&
       !status.available &&
