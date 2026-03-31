@@ -20,7 +20,7 @@ function parseWebhookUrl(raw: string): {
   const segments = url.pathname.split("/").filter(Boolean);
   if (segments.length < 3 || segments[0] !== "hook") {
     throw new Error(
-      `Invalid LobsterCage webhook URL: expected /hook/{cageId}/{webhookToken}, got ${url.pathname}`,
+      "Invalid LobsterCage webhook URL: expected https://{domain}/hook/{cageId}/{webhookToken}",
     );
   }
   return {
@@ -76,7 +76,7 @@ export async function execute(
       exitCode: 1,
       signal: null,
       timedOut: false,
-      errorMessage: `Failed to trigger heartbeat: ${msg}`,
+      errorMessage: `Failed to trigger heartbeat on cage ${cageId}: ${msg}`,
       errorCode: "lobstercage_trigger_failed",
     };
   }
@@ -94,7 +94,7 @@ export async function execute(
       exitCode: 1,
       signal: null,
       timedOut: false,
-      errorMessage: `Heartbeat trigger returned unexpected HTTP ${triggerStatus}`,
+      errorMessage: `Heartbeat trigger on cage ${cageId} returned unexpected HTTP ${triggerStatus}`,
       errorCode: "lobstercage_trigger_unexpected_status",
     };
   }
@@ -119,16 +119,30 @@ export async function execute(
     `${result.summary} (cage: ${result.cageStatus})\n`,
   );
 
+  if (result.completed) {
+    return {
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      summary: result.summary,
+    };
+  }
+
+  if (result.failed) {
+    return {
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      errorMessage: result.summary,
+      errorCode: `lobstercage_${result.cageStatus === "destroyed" ? "cage_destroyed" : "wake_failed"}`,
+    };
+  }
+
   return {
-    exitCode: result.completed ? 0 : 1,
+    exitCode: 1,
     signal: null,
-    timedOut: result.timedOut,
-    summary: result.summary,
-    ...(result.timedOut
-      ? {
-          errorMessage: result.summary,
-          errorCode: "lobstercage_timeout",
-        }
-      : {}),
+    timedOut: true,
+    errorMessage: result.summary,
+    errorCode: "lobstercage_timeout",
   };
 }

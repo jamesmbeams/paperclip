@@ -43,7 +43,8 @@ export async function testEnvironment(
     checks.push({
       code: "lobstercage_webhook_url_invalid",
       level: "error",
-      message: `Invalid webhook URL: ${webhookUrl}`,
+      message: "Invalid webhook URL format.",
+      hint: "Ensure the URL is a valid https:// URL from the LobsterCage dashboard.",
     });
     return {
       adapterType: ctx.adapterType,
@@ -60,7 +61,7 @@ export async function testEnvironment(
       level: "error",
       message:
         "Webhook URL does not match expected format: https://{domain}/hook/{cageId}/{webhookToken}",
-      detail: webhookUrl,
+      hint: "Copy the full webhook URL from the LobsterCage dashboard.",
     });
     return {
       adapterType: ctx.adapterType,

@@ -39,7 +39,20 @@ describe("testEnvironment", () => {
   it("fails when webhookUrl is not a valid URL", async () => {
     const result = await testEnvironment(makeCtx({ webhookUrl: "not-a-url" }));
     expect(result.status).toBe("fail");
-    expect(result.checks.some((c) => c.code === "lobstercage_webhook_url_invalid")).toBe(true);
+    const check = result.checks.find((c) => c.code === "lobstercage_webhook_url_invalid");
+    expect(check).toBeDefined();
+    // Should not leak the URL value in the message
+    expect(check!.message).not.toContain("not-a-url");
+  });
+
+  it("does not leak webhook token in error messages", async () => {
+    const result = await testEnvironment(
+      makeCtx({ webhookUrl: "https://gw.test/wrong/path/secrettoken123" }),
+    );
+    for (const check of result.checks) {
+      expect(check.message).not.toContain("secrettoken123");
+      expect(check.detail ?? "").not.toContain("secrettoken123");
+    }
   });
 
   it("fails when webhookUrl path format is wrong", async () => {

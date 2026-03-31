@@ -2,7 +2,6 @@ import type { AdapterConfigFieldsProps } from "../types";
 import {
   Field,
   DraftInput,
-  help,
 } from "../../components/agent-config-primitives";
 
 const inputClass =
@@ -42,28 +41,26 @@ export function LobsterCageConfigFields({
           placeholder="https://gateway.lobstercage.ai/hook/cage_abc/..."
         />
       </Field>
-      <Field
-        label="OpenClaw Auth Token"
-        hint="Optional token for triggering OpenClaw heartbeats inside the cage"
-      >
-        <DraftInput
-          value={
-            isCreate
-              ? ""
-              : eff(
-                  "adapterConfig",
-                  "openclawAuthToken",
-                  String(config.openclawAuthToken ?? ""),
-                )
-          }
-          onCommit={(v) =>
-            mark("adapterConfig", "openclawAuthToken", v || undefined)
-          }
-          immediate
-          className={inputClass}
-          placeholder="(optional)"
-        />
-      </Field>
+      {!isCreate && (
+        <Field
+          label="OpenClaw Auth Token"
+          hint="Optional token for triggering OpenClaw heartbeats inside the cage"
+        >
+          <DraftInput
+            value={eff(
+              "adapterConfig",
+              "openclawAuthToken",
+              String(config.openclawAuthToken ?? ""),
+            )}
+            onCommit={(v) =>
+              mark("adapterConfig", "openclawAuthToken", v || undefined)
+            }
+            immediate
+            className={inputClass}
+            placeholder="(optional)"
+          />
+        </Field>
+      )}
     </>
   );
 }
