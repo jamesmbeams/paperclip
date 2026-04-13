@@ -41,26 +41,30 @@ export function LobsterCageConfigFields({
           placeholder="https://gateway.lobstercage.ai/hook/cage_abc/..."
         />
       </Field>
-      {!isCreate && (
-        <Field
-          label="OpenClaw Auth Token"
-          hint="Optional token for triggering OpenClaw heartbeats inside the cage"
-        >
-          <DraftInput
-            value={eff(
-              "adapterConfig",
-              "openclawAuthToken",
-              String(config.openclawAuthToken ?? ""),
-            )}
-            onCommit={(v) =>
-              mark("adapterConfig", "openclawAuthToken", v || undefined)
-            }
-            immediate
-            className={inputClass}
-            placeholder="(optional)"
-          />
-        </Field>
-      )}
+      <Field
+        label="OpenClaw Hook Token"
+        hint="Recommended token for triggering /hooks/wake inside the cage"
+      >
+        <DraftInput
+          value={
+            isCreate
+              ? String(values!.openclawAuthToken ?? "")
+              : eff(
+                  "adapterConfig",
+                  "openclawAuthToken",
+                  String(config.openclawAuthToken ?? ""),
+                )
+          }
+          onCommit={(v) =>
+            isCreate
+              ? set!({ openclawAuthToken: v })
+              : mark("adapterConfig", "openclawAuthToken", v || undefined)
+          }
+          immediate
+          className={inputClass}
+          placeholder="Recommended for modern OpenClaw hooks"
+        />
+      </Field>
     </>
   );
 }

@@ -380,6 +380,7 @@ export interface CreateConfigValues {
   envVars: string;
   envBindings: Record<string, unknown>;
   url: string;
+  openclawAuthToken?: string;
   bootstrapPrompt: string;
   payloadTemplateJson?: string;
   workspaceStrategyType?: string;

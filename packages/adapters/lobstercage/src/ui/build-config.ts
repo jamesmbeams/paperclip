@@ -5,6 +5,7 @@ export function buildLobsterCageConfig(
 ): Record<string, unknown> {
   const ac: Record<string, unknown> = {};
   if (v.url) ac.webhookUrl = v.url;
+  if (v.openclawAuthToken?.trim()) ac.openclawAuthToken = v.openclawAuthToken.trim();
   ac.timeoutSec = 600;
   ac.pollIntervalSec = 5;
   return ac;
