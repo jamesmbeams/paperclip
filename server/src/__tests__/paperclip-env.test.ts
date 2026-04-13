@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildPaperclipEnv } from "../adapters/utils.js";
 
 const ORIGINAL_PAPERCLIP_API_URL = process.env.PAPERCLIP_API_URL;
+const ORIGINAL_PAPERCLIP_PUBLIC_URL = process.env.PAPERCLIP_PUBLIC_URL;
+const ORIGINAL_PAPERCLIP_AUTH_PUBLIC_BASE_URL = process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL;
 const ORIGINAL_PAPERCLIP_LISTEN_HOST = process.env.PAPERCLIP_LISTEN_HOST;
 const ORIGINAL_PAPERCLIP_LISTEN_PORT = process.env.PAPERCLIP_LISTEN_PORT;
 const ORIGINAL_HOST = process.env.HOST;
@@ -10,6 +12,15 @@ const ORIGINAL_PORT = process.env.PORT;
 afterEach(() => {
   if (ORIGINAL_PAPERCLIP_API_URL === undefined) delete process.env.PAPERCLIP_API_URL;
   else process.env.PAPERCLIP_API_URL = ORIGINAL_PAPERCLIP_API_URL;
+
+  if (ORIGINAL_PAPERCLIP_PUBLIC_URL === undefined) delete process.env.PAPERCLIP_PUBLIC_URL;
+  else process.env.PAPERCLIP_PUBLIC_URL = ORIGINAL_PAPERCLIP_PUBLIC_URL;
+
+  if (ORIGINAL_PAPERCLIP_AUTH_PUBLIC_BASE_URL === undefined) {
+    delete process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL;
+  } else {
+    process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL = ORIGINAL_PAPERCLIP_AUTH_PUBLIC_BASE_URL;
+  }
 
   if (ORIGINAL_PAPERCLIP_LISTEN_HOST === undefined) delete process.env.PAPERCLIP_LISTEN_HOST;
   else process.env.PAPERCLIP_LISTEN_HOST = ORIGINAL_PAPERCLIP_LISTEN_HOST;
@@ -25,7 +36,20 @@ afterEach(() => {
 });
 
 describe("buildPaperclipEnv", () => {
+  it("prefers a public Paperclip URL over the local runtime URL", () => {
+    process.env.PAPERCLIP_API_URL = "http://localhost:4100";
+    process.env.PAPERCLIP_PUBLIC_URL = "https://paperclip.example.com";
+    process.env.PAPERCLIP_LISTEN_HOST = "127.0.0.1";
+    process.env.PAPERCLIP_LISTEN_PORT = "3101";
+
+    const env = buildPaperclipEnv({ id: "agent-1", companyId: "company-1" });
+
+    expect(env.PAPERCLIP_API_URL).toBe("https://paperclip.example.com");
+  });
+
   it("prefers an explicit PAPERCLIP_API_URL", () => {
+    delete process.env.PAPERCLIP_PUBLIC_URL;
+    delete process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL;
     process.env.PAPERCLIP_API_URL = "http://localhost:4100";
     process.env.PAPERCLIP_LISTEN_HOST = "127.0.0.1";
     process.env.PAPERCLIP_LISTEN_PORT = "3101";
@@ -37,6 +61,8 @@ describe("buildPaperclipEnv", () => {
 
   it("uses runtime listen host/port when explicit URL is not set", () => {
     delete process.env.PAPERCLIP_API_URL;
+    delete process.env.PAPERCLIP_PUBLIC_URL;
+    delete process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL;
     process.env.PAPERCLIP_LISTEN_HOST = "0.0.0.0";
     process.env.PAPERCLIP_LISTEN_PORT = "3101";
     process.env.PORT = "3100";
@@ -48,6 +74,8 @@ describe("buildPaperclipEnv", () => {
 
   it("formats IPv6 hosts safely in fallback URL generation", () => {
     delete process.env.PAPERCLIP_API_URL;
+    delete process.env.PAPERCLIP_PUBLIC_URL;
+    delete process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL;
     process.env.PAPERCLIP_LISTEN_HOST = "::1";
     process.env.PAPERCLIP_LISTEN_PORT = "3101";
 

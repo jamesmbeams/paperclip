@@ -555,6 +555,10 @@ export async function startServer(): Promise<StartedServer> {
   process.env.PAPERCLIP_LISTEN_HOST = runtimeListenHost;
   process.env.PAPERCLIP_LISTEN_PORT = String(listenPort);
   process.env.PAPERCLIP_API_URL = `http://${runtimeApiHost}:${listenPort}`;
+  if (config.authPublicBaseUrl) {
+    process.env.PAPERCLIP_PUBLIC_URL = config.authPublicBaseUrl;
+    process.env.PAPERCLIP_AUTH_PUBLIC_BASE_URL = config.authPublicBaseUrl;
+  }
   
   setupLiveEventsWebSocketServer(server, db as any, {
     deploymentMode: config.deploymentMode,

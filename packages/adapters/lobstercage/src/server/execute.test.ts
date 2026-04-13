@@ -23,6 +23,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function makeCtx(
   configOverrides: Record<string, unknown> = {},
+  contextOverrides: Record<string, unknown> = {},
 ): AdapterExecutionContext {
   return {
     runId: "run-123",
@@ -45,7 +46,7 @@ function makeCtx(
       pollIntervalSec: 0.1,
       ...configOverrides,
     },
-    context: {},
+    context: contextOverrides,
     onLog: vi.fn(),
   };
 }
@@ -207,6 +208,47 @@ describe("execute", () => {
     const requestInit = triggerCall[1] as RequestInit;
     const headers = requestInit.headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer secret-token");
+  });
+
+  it("includes Paperclip issue context in the wake text", async () => {
+    const now = Date.now();
+    mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }, 200));
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        available: true,
+        status: "running",
+        heartbeat: { enabled: true, possiblyActive: true, lastStart: now + 50, lastEnd: null },
+      }),
+    );
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        available: false,
+        status: "stopped",
+        heartbeat: { enabled: true, possiblyActive: false, lastStart: now + 50, lastEnd: null },
+      }),
+    );
+
+    await execute(
+      makeCtx(
+        { openclawAuthToken: "secret-token" },
+        {
+          taskId: "issue-123",
+          wakeReason: "issue_assigned",
+          issueIds: ["issue-123", "issue-456"],
+        },
+      ),
+    );
+
+    const triggerCall = mockFetch.mock.calls[0];
+    const requestInit = triggerCall[1] as RequestInit;
+    const body = JSON.parse(String(requestInit.body));
+    expect(body.mode).toBe("now");
+    expect(body.text).toContain("PAPERCLIP_RUN_ID=run-123");
+    expect(body.text).toContain("PAPERCLIP_TASK_ID=issue-123");
+    expect(body.text).toContain("PAPERCLIP_WAKE_REASON=issue_assigned");
+    expect(body.text).toContain("PAPERCLIP_LINKED_ISSUE_IDS=issue-123,issue-456");
+    expect(body.text).toContain("POST /api/issues/{issueId}/checkout");
+    expect(body.text).toContain("GET /api/agents/me/inbox-lite");
   });
 
   it("returns timeout result when polling exceeds deadline", async () => {
