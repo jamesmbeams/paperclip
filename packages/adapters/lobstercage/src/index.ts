@@ -15,16 +15,18 @@ when idle — you pay only for active compute.
 Prerequisites:
 - A LobsterCage account with a running or stopped cage
 - The cage must have OpenClaw configured with heartbeat enabled
+- The cage must have OpenClaw hooks enabled (\`hooks.enabled=true\`) with a hook token
 - Paperclip env vars set on the cage (PAPERCLIP_API_URL, PAPERCLIP_API_KEY, etc.)
 
 Core fields:
 - webhookUrl (string, required): full webhook URL from LobsterCage dashboard (https://{domain}/hook/{cageId}/{token})
-- openclawAuthToken (string, optional): OpenClaw gateway auth token for triggering heartbeats
+- openclawAuthToken (string, recommended): OpenClaw hook token used when calling \`/hooks/wake\`
 - timeoutSec (number, optional): max seconds to wait for heartbeat completion (default 600)
 - pollIntervalSec (number, optional): seconds between status polls (default 5)
 
 Notes:
 - The agent discovers work via the Paperclip API using PAPERCLIP_API_KEY
+- Modern OpenClaw expects \`/hooks/wake\` requests to include a hook token and a text payload
 - EFS-backed storage persists across hibernate cycles
 - Idle timeout on the cage controls when it hibernates after work completes
 `;

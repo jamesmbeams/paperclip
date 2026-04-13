@@ -63,7 +63,7 @@ describe("testEnvironment", () => {
     expect(result.checks.some((c) => c.code === "lobstercage_webhook_url_format")).toBe(true);
   });
 
-  it("passes and probes status endpoint when URL is valid", async () => {
+  it("warns when webhookUrl is valid but openclawAuthToken is missing", async () => {
     mockFetch.mockResolvedValueOnce(
       jsonResponse({ available: true, status: "running" }),
     );
@@ -74,15 +74,33 @@ describe("testEnvironment", () => {
       }),
     );
 
-    expect(result.status).toBe("pass");
+    expect(result.status).toBe("warn");
     expect(result.checks.some((c) => c.code === "lobstercage_webhook_url_valid")).toBe(true);
     expect(result.checks.some((c) => c.code === "lobstercage_status_probe_ok")).toBe(true);
+    expect(result.checks.some((c) => c.code === "lobstercage_openclaw_auth_token_missing")).toBe(true);
 
     // Verify it probed the correct status URL
     expect(mockFetch).toHaveBeenCalledWith(
       "https://gw.test/status/cage_abc/tok123",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it("passes when webhookUrl is valid and openclawAuthToken is configured", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ available: true, status: "running" }),
+    );
+
+    const result = await testEnvironment(
+      makeCtx({
+        webhookUrl: "https://gw.test/hook/cage_abc/tok123",
+        openclawAuthToken: "hook-secret",
+      }),
+    );
+
+    expect(result.status).toBe("pass");
+    expect(result.checks.some((c) => c.code === "lobstercage_status_probe_ok")).toBe(true);
+    expect(result.checks.some((c) => c.code === "lobstercage_openclaw_auth_token_missing")).toBe(false);
   });
 
   it("warns when status probe returns non-200", async () => {

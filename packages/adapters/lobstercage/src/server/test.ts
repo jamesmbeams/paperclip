@@ -19,6 +19,7 @@ export async function testEnvironment(
   const checks: AdapterEnvironmentCheck[] = [];
   const config = parseObject(ctx.config);
   const webhookUrl = asString(config.webhookUrl, "");
+  const openclawAuthToken = asString(config.openclawAuthToken, "");
 
   if (!webhookUrl) {
     checks.push({
@@ -79,6 +80,17 @@ export async function testEnvironment(
     level: "info",
     message: `Webhook URL is valid (cage: ${cageId})`,
   });
+
+  if (!openclawAuthToken) {
+    checks.push({
+      code: "lobstercage_openclaw_auth_token_missing",
+      level: "warn",
+      message:
+        "openclawAuthToken is not configured. Current OpenClaw hooks usually require a dedicated hook token.",
+      hint:
+        "Set adapterConfig.openclawAuthToken to the hook token configured in the cage's ~/.openclaw/openclaw.json hooks.token field.",
+    });
+  }
 
   // Probe the status endpoint
   const statusUrl = `${parsed.origin}/status/${cageId}/${webhookToken}`;
