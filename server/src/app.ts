@@ -282,7 +282,7 @@ export async function createApp(
           port: hmrPort,
           clientPort: hmrPort,
         },
-        allowedHosts: privateHostnameGateEnabled ? Array.from(privateHostnameAllowSet) : undefined,
+        allowedHosts: opts.deploymentMode === "authenticated" ? Array.from(privateHostnameAllowSet) : undefined,
       },
     });
 
