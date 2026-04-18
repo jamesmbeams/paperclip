@@ -182,6 +182,15 @@ function parseWebhookUrl(raw: string): {
   };
 }
 
+type RuntimeMode = "openclaw_hooks" | "paperclip_runtime";
+
+function parseRuntimeMode(value: unknown): RuntimeMode {
+  if (value === "paperclip_runtime") return "paperclip_runtime";
+  // openclaw_hooks is the default for back-compat: existing cages have no
+  // runtimeMode set and must keep working on the legacy prompt-based path.
+  return "openclaw_hooks";
+}
+
 export async function execute(
   ctx: AdapterExecutionContext,
 ): Promise<AdapterExecutionResult> {
@@ -189,6 +198,11 @@ export async function execute(
   const webhookUrl = asString(config.webhookUrl, "");
   if (!webhookUrl) {
     throw new Error("LobsterCage adapter requires webhookUrl in adapterConfig");
+  }
+
+  const runtimeMode = parseRuntimeMode(config.runtimeMode);
+  if (runtimeMode === "paperclip_runtime") {
+    return executePaperclipRuntime(ctx, config, webhookUrl);
   }
 
   const openclawAuthToken = asString(config.openclawAuthToken, "");
@@ -317,5 +331,216 @@ export async function execute(
     timedOut: true,
     errorMessage: result.summary,
     errorCode: "lobstercage_timeout",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// paperclip_runtime mode (APT-710 / APT-722)
+// ---------------------------------------------------------------------------
+
+const TERMINAL_RUNTIME_STATUSES = new Set([
+  "completed",
+  "failed",
+  "blocked",
+  "cancelled",
+]);
+
+type RuntimeResult = {
+  status: "completed" | "failed" | "blocked" | "cancelled";
+  result?: {
+    outcome?: { summary?: unknown; comment?: unknown };
+    error?: { code?: unknown; message?: unknown };
+  } | null;
+};
+
+function buildInvokeEnvelope(
+  ctx: AdapterExecutionContext,
+  wakePayload: WakePayload,
+  upstreamBaseUrl: string,
+  timeoutMs: number,
+): Record<string, unknown> {
+  const taskId = wakePayload.taskId;
+  const kind = taskId ? "issue_execution" : "heartbeat";
+  const sessionPolicy = ctx.context.forceFreshSession === true ? "fresh" : "reuse";
+  const sessionKey = taskId
+    ? `agent:${ctx.agent.id}:issue:${taskId}`
+    : `agent:${ctx.agent.id}:heartbeat`;
+  const checkedOutByHarness = ctx.context.checkedOutByHarness === true;
+
+  return {
+    version: "v1",
+    run: {
+      runId: ctx.runId,
+      agentId: ctx.agent.id,
+      companyId: ctx.agent.companyId,
+      wakeReason: wakePayload.wakeReason,
+      source: "paperclip",
+    },
+    task: {
+      kind,
+      taskId,
+      checkedOutByHarness,
+    },
+    execution: {
+      sessionPolicy,
+      sessionKey,
+      timeoutMs,
+    },
+    upstream: {
+      type: "paperclip",
+      baseUrl: upstreamBaseUrl,
+    },
+  };
+}
+
+function mapRuntimeResult(
+  runtimeResult: RuntimeResult,
+): AdapterExecutionResult {
+  if (runtimeResult.status === "completed") {
+    const summary = asString(runtimeResult.result?.outcome?.summary, "");
+    return {
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      summary,
+    };
+  }
+
+  // cancelled / failed / blocked all surface the runner's structured error.
+  const err = runtimeResult.result?.error ?? {};
+  const errorCode = asString(err.code, `runner_${runtimeResult.status}`);
+  const errorMessage = asString(err.message, `runner reported ${runtimeResult.status}`);
+  return {
+    exitCode: 1,
+    signal: null,
+    timedOut: false,
+    errorCode,
+    errorMessage,
+  };
+}
+
+async function executePaperclipRuntime(
+  ctx: AdapterExecutionContext,
+  config: Record<string, unknown>,
+  webhookUrl: string,
+): Promise<AdapterExecutionResult> {
+  const openclawAuthToken = asString(config.openclawAuthToken, "");
+  const timeoutSec = asNumber(config.timeoutSec, 600);
+  const pollIntervalSec = Math.max(1, asNumber(config.pollIntervalSec, 2));
+  const timeoutMs = timeoutSec * 1000;
+
+  const wakePayload = buildWakePayload(ctx);
+  const paperclipEnv = buildPaperclipEnvForWake(ctx, wakePayload);
+  const upstreamBaseUrl = paperclipEnv.PAPERCLIP_API_URL ?? "";
+  if (!upstreamBaseUrl) {
+    return {
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      errorCode: "paperclip_runtime_missing_api_url",
+      errorMessage: "PAPERCLIP_API_URL must be resolvable for paperclip_runtime mode",
+    };
+  }
+
+  const envelope = buildInvokeEnvelope(ctx, wakePayload, upstreamBaseUrl, timeoutMs);
+
+  const { domain, cageId, webhookToken } = parseWebhookUrl(webhookUrl);
+  const runUrl = `${domain}/hook/${cageId}/${webhookToken}/paperclip/run`;
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (openclawAuthToken) {
+    headers["authorization"] = `Bearer ${openclawAuthToken}`;
+  }
+
+  await ctx.onLog("stdout", `Submitting paperclip_runtime envelope to cage ${cageId}...\n`);
+
+  let acceptedBody: { runtimeRunId?: unknown } | null = null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    const res = await fetch(runUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(envelope),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.status !== 202) {
+      const body = await res.text().catch(() => "");
+      return {
+        exitCode: 1,
+        signal: null,
+        timedOut: false,
+        errorCode: "paperclip_runtime_accept_failed",
+        errorMessage: `Cage ${cageId} rejected envelope with HTTP ${res.status}${body ? `: ${body.slice(0, 256)}` : ""}`,
+      };
+    }
+    acceptedBody = (await res.json().catch(() => null)) as { runtimeRunId?: unknown } | null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      errorCode: "paperclip_runtime_accept_failed",
+      errorMessage: `Failed to submit envelope to cage ${cageId}: ${msg}`,
+    };
+  }
+
+  const runtimeRunId = asString(acceptedBody?.runtimeRunId, "");
+  if (!runtimeRunId) {
+    return {
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      errorCode: "paperclip_runtime_accept_failed",
+      errorMessage: `Cage ${cageId} accepted envelope without runtimeRunId`,
+    };
+  }
+
+  await ctx.onLog(
+    "stdout",
+    `Accepted. runtimeRunId=${runtimeRunId}. Polling for completion...\n`,
+  );
+
+  const pollUrl = `${domain}/hook/${cageId}/${webhookToken}/paperclip/runs/${runtimeRunId}`;
+  const deadlineMs = Date.now() + timeoutMs;
+  const pollIntervalMs = pollIntervalSec * 1000;
+
+  while (Date.now() < deadlineMs) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15_000);
+      const res = await fetch(pollUrl, {
+        method: "GET",
+        headers: openclawAuthToken ? { authorization: `Bearer ${openclawAuthToken}` } : {},
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const body = (await res.json().catch(() => null)) as RuntimeResult | null;
+      if (body && typeof body.status === "string" && TERMINAL_RUNTIME_STATUSES.has(body.status)) {
+        await ctx.onLog(
+          "stdout",
+          `Runtime run ${runtimeRunId} terminated with status=${body.status}\n`,
+        );
+        return mapRuntimeResult(body);
+      }
+    } catch (err) {
+      // Transient poll failure — log, then retry on next tick. A sustained
+      // outage will eventually hit the wall-clock timeout below.
+      const msg = err instanceof Error ? err.message : String(err);
+      await ctx.onLog("stderr", `poll error: ${msg}\n`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return {
+    exitCode: 1,
+    signal: null,
+    timedOut: true,
+    errorCode: "paperclip_runtime_timeout",
+    errorMessage: `Runtime run did not terminate within ${timeoutSec}s`,
   };
 }
