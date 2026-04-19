@@ -8,6 +8,7 @@
 import type { ComponentType } from "react";
 import {
   Bot,
+  Box,
   Code,
   Gem,
   MousePointer2,
@@ -95,6 +96,11 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
     icon: Bot,
     comingSoon: true,
     disabledLabel: "Configure OpenClaw within the App",
+  },
+  lobstercage: {
+    label: "LobsterCage",
+    description: "Sandboxed agent runtime in a managed container",
+    icon: Box,
   },
   process: {
     label: "Process",

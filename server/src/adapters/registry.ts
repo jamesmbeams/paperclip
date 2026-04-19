@@ -55,6 +55,14 @@ import {
   agentConfigurationDoc as openclawGatewayAgentConfigurationDoc,
   models as openclawGatewayModels,
 } from "@paperclipai/adapter-openclaw-gateway";
+import {
+  execute as lobsterCageExecute,
+  testEnvironment as lobsterCageTestEnvironment,
+} from "@paperclipai/adapter-lobstercage/server";
+import {
+  agentConfigurationDoc as lobsterCageAgentConfigurationDoc,
+  models as lobsterCageModels,
+} from "@paperclipai/adapter-lobstercage";
 import { listCodexModels } from "./codex-models.js";
 import { listCursorModels } from "./cursor-models.js";
 import {
@@ -166,6 +174,17 @@ const openclawGatewayAdapter: ServerAdapterModule = {
   agentConfigurationDoc: openclawGatewayAgentConfigurationDoc,
 };
 
+const lobsterCageAdapter: ServerAdapterModule = {
+  type: "lobstercage",
+  execute: lobsterCageExecute,
+  testEnvironment: lobsterCageTestEnvironment,
+  models: lobsterCageModels,
+  supportsLocalAgentJwt: false,
+  supportsInstructionsBundle: false,
+  requiresMaterializedRuntimeSkills: false,
+  agentConfigurationDoc: lobsterCageAgentConfigurationDoc,
+};
+
 const openCodeLocalAdapter: ServerAdapterModule = {
   type: "opencode_local",
   execute: openCodeExecute,
@@ -236,6 +255,7 @@ function registerBuiltInAdapters() {
     cursorLocalAdapter,
     geminiLocalAdapter,
     openclawGatewayAdapter,
+    lobsterCageAdapter,
     hermesLocalAdapter,
     processAdapter,
     httpAdapter,
